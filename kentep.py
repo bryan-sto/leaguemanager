@@ -277,7 +277,7 @@ with tab1:
             st.session_state.players_distributed = False
     
     if not st.session_state.players_distributed:
-         st.info("Enter player details above and click 'Distribute Players' to proceed.")
+         st.info("Masukin Nama Player Diatas Lalu Klik 'Bagikan Pemain Secara Random.")
 
 
 with tab2:
@@ -338,7 +338,7 @@ with tab2:
         st.session_state.parsed_teams_for_output_cache = parsed_teams_for_cache
         
     else:
-        st.info("Players have not been distributed yet. Please go to the 'Player Pool & Team Setup' tab.")
+        st.info("Player Belum Dibagiin. Balik ke Player Pool & Setup Team Tab.")
 
 
 with tab3:
@@ -436,7 +436,7 @@ with tab3:
         )
 
     elif not (st.session_state.players_distributed and st.session_state.teams_data):
-        st.info("Configure event details, input player pool, distribute players, then prepare poster text.")
+        st.info("Set Detail Event, Masukin Pemain,Bagikan Pemain,Siapin Poster Lalu Copas Ke WA")
     else:
         st.info("Review distributed teams or make edits in the 'Team Rosters & Edits' tab, then click 'Prepare Poster Text for Copying'.")
 
