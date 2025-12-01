@@ -4,6 +4,7 @@ import random
 import json
 import requests
 import os
+import copy
 from itertools import combinations
 import math
 from io import BytesIO
@@ -20,6 +21,61 @@ COLOR_TO_EMOJI_MAP = {
     "#000000": "⚫", "#FF0000": "🔴",
 }
 DEFAULT_COLOR_EMOJI = "🎨"
+
+# --- Cloud Sync Config ---
+KEYS_TO_PERSIST = [
+    'event_title', 'event_date', 'event_time_start', 'event_time_end', 'event_place',
+    'event_publisher', 'event_organizer', 'kick_off_time', 'price_player', 'price_gk',
+    'num_teams', 'game_duration', 'teams_data', 'form_global_outfield_players',
+    'form_global_goalkeepers', 'players_distributed'
+]
+
+def save_state_to_cloud(api_key, bin_id):
+    if not api_key or not bin_id:
+        return
+    try:
+        headers = {
+            'Content-Type': 'application/json',
+            'X-Master-Key': api_key,
+            'X-Bin-Name': f"Kentep Event - {st.session_state.event_date.isoformat()}"
+        }
+        snapshot = {}
+        for k in KEYS_TO_PERSIST:
+            val = st.session_state.get(k)
+            if isinstance(val, (datetime.date, datetime.time)):
+                snapshot[k] = val.isoformat()
+            else:
+                snapshot[k] = val
+        
+        requests.put(f"https://api.jsonbin.io/v3/b/{bin_id}", json=snapshot, headers=headers, timeout=10)
+        st.session_state['cloud_sync_status'] = f"✅ Last sync: {datetime.datetime.now().strftime('%H:%M:%S')}"
+    except requests.exceptions.RequestException:
+        st.session_state['cloud_sync_status'] = "⚠️ Sync failed"
+
+def load_state_from_cloud(api_key, bin_id):
+    if not api_key or not bin_id:
+        st.session_state['cloud_sync_status'] = "Not configured"
+        return
+    try:
+        headers = {'X-Master-Key': api_key}
+        response = requests.get(f"https://api.jsonbin.io/v3/b/{bin_id}/latest", headers=headers, timeout=10)
+        response.raise_for_status()
+        loaded_data = response.json().get('record', {})
+
+        for k, v in loaded_data.items():
+            if k in KEYS_TO_PERSIST:
+                if k == 'event_date' and v:
+                    try: st.session_state[k] = datetime.datetime.strptime(v, "%Y-%m-%d").date()
+                    except (ValueError, TypeError): pass
+                elif k in ('event_time_start', 'event_time_end', 'kick_off_time') and v:
+                    try: st.session_state[k] = datetime.datetime.strptime(v, "%H:%M:%S").time()
+                    except (ValueError, TypeError): pass
+                else:
+                    st.session_state[k] = v
+        
+        st.session_state['cloud_sync_status'] = "🔄 Loaded from cloud"
+    except requests.exceptions.RequestException:
+        st.session_state['cloud_sync_status'] = "⚠️ Load failed"
 
 # --- Helper Functions ---
 def generate_team_id(index):
@@ -109,8 +165,9 @@ def initialize_session_state(force_reset=False):
         'num_teams': DEFAULT_NUM_TEAMS, 'teams_data': [],
         'game_duration': DEFAULT_GAME_DURATION,
         'form_global_outfield_players': "", 'form_global_goalkeepers': "",
-        'players_distributed': False,
-        'poster_text_for_copy': "", 'parsed_teams_for_output_cache': []
+        'players_distributed': False, 'poster_text_for_copy': "", 
+        'parsed_teams_for_output_cache': [], 'cloud_sync_status': "Initializing...",
+        'initial_load_done': False
     }
     for key, default_value in defaults.items():
         if force_reset or key not in st.session_state:
@@ -122,86 +179,32 @@ initialize_session_state()
 st.set_page_config(layout="wide", page_title="Kentep League Manager")
 st.title("⚽ Kentep League Manager")
 
+# --- Cloud Sync Execution ---
+api_key = st.secrets.get("JSONBIN_API_KEY")
+bin_id = st.secrets.get("JSONBIN_BIN_ID")
+
+if not st.session_state.initial_load_done and api_key and bin_id:
+    load_state_from_cloud(api_key, bin_id)
+    st.session_state.initial_load_done = True
+    st.rerun()
+
+state_before_run = copy.deepcopy({k: st.session_state.get(k) for k in KEYS_TO_PERSIST})
+
 # --- Sidebar Controls ---
 with st.sidebar:
     st.header("⚙️ Konfigurasi Event")
 
     # --- Cloud Storage ---
     with st.expander("☁️ Cloud Storage & Sync", expanded=True):
-        
-        # Try to get secrets from Streamlit's secrets manager, then fall back to text input
-        api_key = st.secrets.get("JSONBIN_API_KEY")
-        bin_id = st.secrets.get("JSONBIN_BIN_ID")
-
         if not api_key or not bin_id:
             st.info(
                 """
-                **How to enable Cloud Sync:**
-                1. Add `JSONBIN_API_KEY` and `JSONBIN_BIN_ID` to your Streamlit Cloud app secrets.
-                
-                You can get these keys from [jsonbin.io](https://jsonbin.io) after creating a free account and a new JSON bin.
+                **Cloud Sync is not configured.**
+                To enable, add `JSONBIN_API_KEY` and `JSONBIN_BIN_ID` to your Streamlit Cloud app secrets.
+                You can get these from [jsonbin.io](https://jsonbin.io).
                 """
             )
-            api_key_input = st.text_input("JSONBin API Key (Fallback)", type="password", help="Enter if not set in secrets")
-            bin_id_input = st.text_input("JSONBin Bin ID (Fallback)", type="password", help="Enter if not set in secrets")
-            if not api_key: api_key = api_key_input
-            if not bin_id: bin_id = bin_id_input
-
-        cloud_cols = st.columns(2)
-        with cloud_cols[0]:
-            if st.button("💾 Save to Cloud", key="save_to_cloud"):
-                if api_key and bin_id:
-                    headers = {
-                        'Content-Type': 'application/json',
-                        'X-Master-Key': api_key,
-                        'X-Bin-Name': f"Kentep Event - {st.session_state.event_date.isoformat()}"
-                    }
-                    snapshot = {}
-                    keys_to_save = ['event_title','event_date','event_time_start','event_time_end','event_place',
-                                    'event_publisher','event_organizer','kick_off_time','price_player','price_gk',
-                                    'num_teams','game_duration','teams_data','form_global_outfield_players',
-                                    'form_global_goalkeepers','players_distributed']
-                    for k in keys_to_save:
-                        val = st.session_state.get(k)
-                        if isinstance(val, (datetime.date, datetime.time)):
-                            snapshot[k] = val.isoformat()
-                        else:
-                            snapshot[k] = val
-                    
-                    try:
-                        response = requests.put(f"https://api.jsonbin.io/v3/b/{bin_id}", json=snapshot, headers=headers)
-                        response.raise_for_status()
-                        st.success("Successfully saved to cloud!")
-                    except requests.exceptions.RequestException as e:
-                        st.error(f"Cloud save failed: {e}")
-                else:
-                    st.warning("API Key and Bin ID are required.")
-
-        with cloud_cols[1]:
-            if st.button("🔄 Load from Cloud", key="load_from_cloud"):
-                if api_key and bin_id:
-                    headers = {'X-Master-Key': api_key}
-                    try:
-                        response = requests.get(f"https://api.jsonbin.io/v3/b/{bin_id}/latest", headers=headers)
-                        response.raise_for_status()
-                        loaded_data = response.json().get('record', {})
-
-                        for k, v in loaded_data.items():
-                            if k == 'event_date':
-                                try: st.session_state['event_date'] = datetime.datetime.strptime(v, "%Y-%m-%d").date()
-                                except: pass
-                            elif k in ('event_time_start','event_time_end','kick_off_time'):
-                                try: st.session_state[k] = datetime.datetime.strptime(v, "%H:%M:%S").time()
-                                except: pass
-                            else:
-                                st.session_state[k] = v
-                        
-                        st.success("Successfully loaded from cloud!")
-                        st.rerun()
-                    except requests.exceptions.RequestException as e:
-                        st.error(f"Cloud load failed: {e}")
-                else:
-                    st.warning("API Key and Bin ID are required.")
+        st.caption(f"Status: {st.session_state.cloud_sync_status}")
     st.markdown("---")
 
     st.subheader("General Info")
@@ -442,3 +445,8 @@ with tab3:
 
 st.markdown("---")
 st.caption("Kentep FC Jaya!")
+
+# --- Auto-save on change ---
+state_after_run = {k: st.session_state.get(k) for k in KEYS_TO_PERSIST}
+if state_before_run != state_after_run and api_key and bin_id:
+    save_state_to_cloud(api_key, bin_id)
