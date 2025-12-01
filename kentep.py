@@ -4,7 +4,6 @@ import random
 import json
 import requests
 import os
-from dotenv import load_dotenv
 from itertools import combinations
 import math
 from io import BytesIO
@@ -447,3 +446,4 @@ with tab3:
 
 st.markdown("---")
 st.caption("Kentep FC Jaya!")
+
