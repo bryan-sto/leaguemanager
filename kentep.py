@@ -8,9 +8,6 @@ from itertools import combinations
 import math
 from io import BytesIO
 
-# Load environment variables from .env file for local development
-load_dotenv()
-
 # --- Basic Colors Definition ---
 BASIC_COLORS_LIMITED = {
     "Blue": "#0000FF", "Yellow": "#FFFF00", "White": "#FFFFFF",
@@ -132,16 +129,15 @@ with st.sidebar:
     # --- Cloud Storage ---
     with st.expander("☁️ Cloud Storage & Sync", expanded=True):
         
-        # Try to get secrets from Streamlit's secrets manager, then .env, then fall back to text input
-        api_key = st.secrets.get("JSONBIN_API_KEY", os.environ.get("JSONBIN_API_KEY"))
-        bin_id = st.secrets.get("JSONBIN_BIN_ID", os.environ.get("JSONBIN_BIN_ID"))
+        # Try to get secrets from Streamlit's secrets manager, then fall back to text input
+        api_key = st.secrets.get("JSONBIN_API_KEY")
+        bin_id = st.secrets.get("JSONBIN_BIN_ID")
 
         if not api_key or not bin_id:
             st.info(
                 """
                 **How to enable Cloud Sync:**
-                1. **(Local):** Create a `.env` file in the project root with `JSONBIN_API_KEY=\"...\"` and `JSONBIN_BIN_ID=\"...\"`.
-                2. **(Deployed):** Add these two keys to your Streamlit Cloud app secrets.
+                1. Add `JSONBIN_API_KEY` and `JSONBIN_BIN_ID` to your Streamlit Cloud app secrets.
                 
                 You can get these keys from [jsonbin.io](https://jsonbin.io) after creating a free account and a new JSON bin.
                 """
@@ -446,4 +442,3 @@ with tab3:
 
 st.markdown("---")
 st.caption("Kentep FC Jaya!")
-
