@@ -344,11 +344,11 @@ with tab2:
                     st.markdown(f"<span style='font-size: 12px; color: {team_data_ref['team_color_hex']}; background-color: {team_data_ref['team_color_hex']}; border-radius: 3px;'>    </span> Selected Color", unsafe_allow_html=True)
                     st.markdown("---")
                     st.markdown("**Roster**")
-                    header_cols = st.columns([4, 2, 1]); header_cols[0].markdown("_Player Name_"); header_cols[1].markdown("_Paid?_")
+                    header_cols = st.columns([5, 2, 1]); header_cols[0].markdown("_Player Name_"); header_cols[1].markdown("_Paid?_")
                     
                     players_to_remove_indices = []
                     for p_idx, player in enumerate(team_data_ref['players']):
-                        p_cols = st.columns([4, 2, 1])
+                        p_cols = st.columns([5, 2, 1])
                         with p_cols[0]:
                             display_name, gk_prefix = (player['name'], "🧤 GK: ")
                             if player['is_gk']: display_name = f"{gk_prefix}{display_name}"
