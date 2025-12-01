@@ -1,3 +1,5 @@
+# Kentep League Manager v2.2
+# app.py
 import streamlit as st
 import datetime
 import random
@@ -222,38 +224,6 @@ with st.sidebar:
     st.number_input("Price per Goalkeeper (IDR)", min_value=0.0, key="price_gk", step=1000.0, format="%.0f")
     st.markdown("---")
 
-    st.subheader("💰 Financial Summary")
-    total_players = 0
-    total_gks = 0
-    paid_players = 0
-    paid_gks = 0
-    teams_source = st.session_state.get('parsed_teams_for_output_cache', [])
-    if not teams_source and st.session_state.get('players_distributed'):
-        teams_source = st.session_state.get('teams_data', [])
-    if teams_source:
-        all_players_list = [p for team in teams_source for p in team.get('players', [])]
-        for player in all_players_list:
-            if player.get('is_gk'):
-                total_gks += 1
-                if player.get('paid'): paid_gks += 1
-            else:
-                total_players += 1
-                if player.get('paid'): paid_players += 1
-    price_player = st.session_state.get('price_player', 0.0)
-    price_gk = st.session_state.get('price_gk', 0.0)
-    collected_income = (paid_players * price_player) + (paid_gks * price_gk)
-    expected_income = (total_players * price_player) + (total_gks * price_gk)
-    st.metric(label="Collected Income", value=f"IDR {collected_income:,.0f}")
-    if expected_income > 0:
-        try:
-            st.progress(collected_income / expected_income)
-        except ZeroDivisionError:
-            st.progress(0.0)
-        st.caption(f"Expected: IDR {expected_income:,.0f}")
-    else:
-        st.caption("No players to calculate income from.")
-    st.markdown("---")
-
     st.subheader("Actions")
     if st.button("⚠️ Reset All Inputs & Data", key="reset_all_button"):
         initialize_session_state(force_reset=True)
@@ -261,7 +231,7 @@ with st.sidebar:
         st.rerun()
 
 # --- Main Tabs ---
-tab1, tab2, tab3 = st.tabs(["👤 Player Pool & Setup Team", "👥 Team Rosters & Edit", "📋 Poster Output"])
+tab1, tab2, tab3, tab4 = st.tabs(["👤 Player Pool & Setup Team", "👥 Team Rosters & Edit", "📋 Poster Output", "💰 Finance"])
 
 with tab1:
     st.header("Enter Player Pool and Define Teams")
@@ -344,11 +314,11 @@ with tab2:
                     st.markdown(f"<span style='font-size: 12px; color: {team_data_ref['team_color_hex']}; background-color: {team_data_ref['team_color_hex']}; border-radius: 3px;'>    </span> Selected Color", unsafe_allow_html=True)
                     st.markdown("---")
                     st.markdown("**Roster**")
-                    header_cols = st.columns([5, 2, 1]); header_cols[0].markdown("_Player Name_"); header_cols[1].markdown("_Paid?_")
+                    header_cols = st.columns([5, 1]); header_cols[0].markdown("_Player Name_")
                     
                     players_to_remove_indices = []
                     for p_idx, player in enumerate(team_data_ref['players']):
-                        p_cols = st.columns([5, 2, 1])
+                        p_cols = st.columns([5, 1])
                         with p_cols[0]:
                             display_name, gk_prefix = (player['name'], "🧤 GK: ")
                             if player['is_gk']: display_name = f"{gk_prefix}{display_name}"
@@ -357,9 +327,6 @@ with tab2:
                             if player['is_gk'] and cleaned_new_name.startswith(gk_prefix): cleaned_new_name = cleaned_new_name[len(gk_prefix):]
                             if cleaned_new_name != player['name']: player['name'] = cleaned_new_name
                         with p_cols[1]:
-                            is_paid = st.checkbox("Paid", value=player.get('paid', False), key=f"p_paid_{team_id}_{player['id']}", label_visibility="collapsed")
-                            if is_paid != player.get('paid', False): player['paid'] = is_paid
-                        with p_cols[2]:
                             if st.button("x", key=f"p_rem_{team_id}_{player['id']}", help=f"Remove {player['name']}"):
                                 players_to_remove_indices.append(p_idx); needs_rerun = True
                     if players_to_remove_indices:
@@ -442,6 +409,61 @@ with tab3:
             st.markdown("**Color legend:** " + " | ".join([f"{COLOR_TO_EMOJI_MAP.get(v,DEFAULT_COLOR_EMOJI)} {k}" for k,v in BASIC_COLORS_LIMITED.items()]))
         else:
             st.info("Generate poster first to see the output.")
+
+with tab4:
+    st.header("💰 Financial Overview")
+    
+    st.subheader("Financial Summary")
+    total_players = 0
+    total_gks = 0
+    paid_players = 0
+    paid_gks = 0
+    teams_source = st.session_state.get('parsed_teams_for_output_cache', [])
+    if not teams_source and st.session_state.get('players_distributed'):
+        teams_source = st.session_state.get('teams_data', [])
+    if teams_source:
+        all_players_list = [p for team in teams_source for p in team.get('players', [])]
+        for player in all_players_list:
+            if player.get('is_gk'):
+                total_gks += 1
+                if player.get('paid'): paid_gks += 1
+            else:
+                total_players += 1
+                if player.get('paid'): paid_players += 1
+    price_player = st.session_state.get('price_player', 0.0)
+    price_gk = st.session_state.get('price_gk', 0.0)
+    collected_income = (paid_players * price_player) + (paid_gks * price_gk)
+    expected_income = (total_players * price_player) + (total_gks * price_gk)
+    st.metric(label="Collected Income", value=f"IDR {collected_income:,.0f}")
+    if expected_income > 0:
+        try:
+            st.progress(collected_income / expected_income)
+        except ZeroDivisionError:
+            st.progress(0.0)
+        st.caption(f"Expected: IDR {expected_income:,.0f}")
+    else:
+        st.caption("No players to calculate income from.")
+    st.markdown("---")
+
+    st.header("Player Payment Status")
+    if st.session_state.get('players_distributed') and st.session_state.get('teams_data'):
+        for team_data_ref in st.session_state.teams_data:
+            team_name = team_data_ref.get('team_name_display', f"Team {team_data_ref['id']}")
+            st.subheader(team_name)
+
+            for player in team_data_ref['players']:
+                cols = st.columns([4, 1])
+                with cols[0]:
+                    display_name = player['name']
+                    if player.get('is_gk'):
+                        display_name = f"🧤 GK: {display_name}"
+                    st.markdown(display_name)
+                with cols[1]:
+                    is_paid = st.checkbox("Paid", value=player.get('paid', False), key=f"finance_p_paid_{team_data_ref['id']}_{player['id']}", label_visibility="collapsed")
+                    if is_paid != player.get('paid', False):
+                        player['paid'] = is_paid
+    else:
+        st.info("No players to display. Distribute players in the 'Player Pool' tab first.")
 
 st.markdown("---")
 st.caption("Kentep FC Jaya!")
